@@ -2,6 +2,7 @@ package pmc
 
 import (
 	"math"
+	"strconv"
 	"testing"
 )
 
@@ -20,32 +21,21 @@ func TestPMCHash(t *testing.T) {
 }
 
 func TestPMCHashAdd(t *testing.T) {
-	flow := []byte("pmc")
-	halfFlow := []byte("halfpmc")
-	s, _ := NewForMaxFlows(10000000)
-	//start := time.Now()
-	for k := 0; k < 1000000; k++ {
-		s.Increment(flow)
-		if k%2 == 0 {
-			s.Increment(halfFlow)
+	flows := make([]string, 5, 5)
+	s, _ := NewForMaxFlows(100000)
+	for j := range flows {
+		flows[j] = "flow" + strconv.Itoa(j)
+		for i := 0; i < 1000000; i++ {
+			if i%(j+1) == 0 {
+				s.Increment([]byte(flows[j]))
+			}
 		}
 	}
-	//elapsed := time.Since(start)
-	//fmt.Println(1500000, "x Incrememt took", elapsed)
-
-	//start = time.Now()
-	hfCount := s.GetEstimate(halfFlow)
-	fCount := s.GetEstimate(flow)
-
-	fErr := 100 * (1 - float64(fCount)/1000000)
-	hfErr := 100 * (1 - float64(hfCount)/500000)
-	if math.Abs(fErr) > 10 {
-		t.Errorf("Expected error for flow 'flow' <= 10%%, got %f", math.Abs(fErr))
+	for i, v := range flows {
+		fCount := s.GetEstimate([]byte(v))
+		fErr := 100 - (100 * (1 - float64(fCount)/(10000000/float64(i+1))))
+		if math.Abs(fErr) > 11 {
+			t.Errorf("Expected error for flow '%s' <= 10%%, got %f", v, math.Abs(fErr))
+		}
 	}
-	if math.Abs(hfErr) > 10 {
-		t.Errorf("Expected error for flow 'flow' <= 10%%, got %f", math.Abs(hfErr))
-	}
-
-	//elapsed = time.Since(start)
-	//fmt.Println("GetEstimate took", elapsed)
 }

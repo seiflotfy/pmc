@@ -1,10 +1,10 @@
 package pmc
 
 import (
+	"encoding/binary"
 	"errors"
-	"fmt"
+	"hash/fnv"
 	"math"
-	"strconv"
 
 	"code.google.com/p/gofarmhash"
 
@@ -37,16 +37,16 @@ func New(l uint, m uint, w uint, maxFlows uint) (*Sketch, error) {
 	return &Sketch{float64(l), float64(m), float64(w), make(bitmaps.Bitmap, l/8)}, nil
 }
 
-func (sketch *Sketch) getHash(flow []byte, i, j uint) []byte {
-	bi := strconv.Itoa(int(i))
-	bj := strconv.Itoa(int(j))
-	f := append(flow, bi...)
-	f = append(f, bj...)
-	return f
-}
+func (sketch *Sketch) getPos(f []byte, i, j uint) uint {
+	r := (i+13)*104729 + j
+	hasher := fnv.New64a()
+	hasher.Write(f)
 
-func (sketch *Sketch) getPos(f []byte) uint {
-	hf := uint(farmhash.Hash64(f))
+	seed := make([]byte, 64, 64)
+	binary.LittleEndian.PutUint64(seed, uint64(r))
+
+	hash := hasher.Sum(seed)
+	hf := uint(farmhash.Hash64(hash))
 	return hf % uint(sketch.l)
 }
 
@@ -56,8 +56,7 @@ Add ...
 func (sketch *Sketch) Add(flow []byte) {
 	i := rand(uint(sketch.m))
 	j := georand(uint(sketch.w))
-	f := sketch.getHash(flow, i, j)
-	pos := sketch.getPos(f)
+	pos := sketch.getPos(flow, i, j)
 	sketch.B.Set(pos, true)
 }
 
@@ -66,8 +65,7 @@ func (sketch *Sketch) getZSum(flow []byte) uint {
 	for i := 0.0; i < sketch.m; i++ {
 		j := 0.0
 		for j < sketch.w {
-			f := sketch.getHash(flow, uint(i), uint(j))
-			pos := sketch.getPos(f)
+			pos := sketch.getPos(flow, uint(i), uint(j))
 			if sketch.B.Get(pos) == false {
 				break
 			}
@@ -81,8 +79,7 @@ func (sketch *Sketch) getZSum(flow []byte) uint {
 func (sketch *Sketch) getEmptyRows(flow []byte) uint {
 	k := uint(0)
 	for i := 0.0; i < sketch.m; i++ {
-		f := sketch.getHash(flow, uint(i), 0)
-		pos := sketch.getPos(f)
+		pos := sketch.getPos(flow, uint(i), 0)
 		if sketch.B.Get(pos) == false {
 			k++
 		}
@@ -136,10 +133,5 @@ func (sketch *Sketch) GetEstimate(flow []byte) uint {
 	}
 
 	z := float64(sketch.getZSum(flow))
-
-	fmt.Println("p:", p)
-	fmt.Println("k:", k)
-	fmt.Println("n:", n)
-	fmt.Println("z:", z)
 	return uint(m * math.Pow(2, z/m) / rho(p))
 }

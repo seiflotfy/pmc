@@ -28,8 +28,7 @@ func rand(m uint) uint {
 func printVirtualMatrix(s *Sketch, flow []byte) {
 	for i := 0.0; i < s.m; i++ {
 		for j := 0.0; j < s.w; j++ {
-			f := s.getHash([]byte("pmc"), uint(i), uint(j))
-			pos := s.getPos(f)
+			pos := s.getPos([]byte("pmc"), uint(i), uint(j))
 			if s.B.Get(pos) == false {
 				fmt.Print(0)
 			} else {

@@ -21,7 +21,10 @@ type Sketch struct {
 }
 
 /*
-New ...
+New returns a PMC Sketch with the properties:
+l = total number of bits for sketch
+m = total number of rows for each flow
+w = total number of columns for each flow
 */
 func New(l uint, m uint, w uint) (*Sketch, error) {
 	if l == 0 {
@@ -37,7 +40,8 @@ func New(l uint, m uint, w uint) (*Sketch, error) {
 }
 
 /*
-NewForMaxFlows ...
+NewForMaxFlows returns a PMC Sketch adapted to the size of the max number of
+flows expected.
 */
 func NewForMaxFlows(maxFlows uint) (*Sketch, error) {
 	l := maxFlows * 32

@@ -29,7 +29,7 @@ func printVirtualMatrix(s *Sketch, flow []byte) {
 	for i := 0.0; i < s.m; i++ {
 		for j := 0.0; j < s.w; j++ {
 			pos := s.getPos([]byte("pmc"), uint(i), uint(j))
-			if s.B.Get(pos) == false {
+			if s.bitmap.Get(pos) == false {
 				fmt.Print(0)
 			} else {
 				fmt.Print(1)

@@ -1,10 +1,9 @@
 package pmc
 
 import (
-	"encoding/binary"
 	"errors"
-	"hash/fnv"
 	"math"
+	"strconv"
 
 	"code.google.com/p/gofarmhash"
 
@@ -15,16 +14,16 @@ import (
 Sketch ...
 */
 type Sketch struct {
-	l float64
-	m float64
-	w float64
-	B bitmaps.Bitmap
+	l      float64
+	m      float64
+	w      float64
+	bitmap bitmaps.Bitmap
 }
 
 /*
 New ...
 */
-func New(l uint, m uint, w uint, maxFlows uint) (*Sketch, error) {
+func New(l uint, m uint, w uint) (*Sketch, error) {
 	if l == 0 {
 		return nil, errors.New("Expected l > 0, got 0")
 	}
@@ -37,27 +36,33 @@ func New(l uint, m uint, w uint, maxFlows uint) (*Sketch, error) {
 	return &Sketch{float64(l), float64(m), float64(w), make(bitmaps.Bitmap, l/8)}, nil
 }
 
-func (sketch *Sketch) getPos(f []byte, i, j uint) uint {
-	r := (i+13)*104729 + j
-	hasher := fnv.New64a()
-	hasher.Write(f)
-
-	seed := make([]byte, 64, 64)
-	binary.LittleEndian.PutUint64(seed, uint64(r))
-
-	hash := hasher.Sum(seed)
-	hf := uint(farmhash.Hash64(hash))
-	return hf % uint(sketch.l)
+/*
+NewForMaxFlows ...
+*/
+func NewForMaxFlows(maxFlows uint) (*Sketch, error) {
+	l := maxFlows * 32
+	return New(l, 256, 32)
 }
 
 /*
-Add ...
+It is straightforward to use any uniformly distributed hash function with
+sufficiently random output in the role of H: the input parameters can
+simply be concatenated to a single bit string.
 */
-func (sketch *Sketch) Add(flow []byte) {
+func (sketch *Sketch) getPos(f []byte, i, j uint) uint {
+	s := strconv.Itoa(int(i)) + string(f) + strconv.Itoa(int(j))
+	hash := farmhash.Hash64([]byte(s))
+	return uint(hash) % uint(sketch.l)
+}
+
+/*
+Increment the count of the flow by 1
+*/
+func (sketch *Sketch) Increment(flow []byte) {
 	i := rand(uint(sketch.m))
 	j := georand(uint(sketch.w))
 	pos := sketch.getPos(flow, i, j)
-	sketch.B.Set(pos, true)
+	sketch.bitmap.Set(pos, true)
 }
 
 func (sketch *Sketch) getZSum(flow []byte) uint {
@@ -66,7 +71,7 @@ func (sketch *Sketch) getZSum(flow []byte) uint {
 		j := 0.0
 		for j < sketch.w {
 			pos := sketch.getPos(flow, uint(i), uint(j))
-			if sketch.B.Get(pos) == false {
+			if sketch.bitmap.Get(pos) == false {
 				break
 			}
 			j++
@@ -80,7 +85,7 @@ func (sketch *Sketch) getEmptyRows(flow []byte) uint {
 	k := uint(0)
 	for i := 0.0; i < sketch.m; i++ {
 		pos := sketch.getPos(flow, uint(i), 0)
-		if sketch.B.Get(pos) == false {
+		if sketch.bitmap.Get(pos) == false {
 			k++
 		}
 	}
@@ -89,8 +94,8 @@ func (sketch *Sketch) getEmptyRows(flow []byte) uint {
 
 func (sketch *Sketch) getP() float64 {
 	ones := float64(0)
-	for i := uint(0); i < uint(sketch.B.Size()); i++ {
-		if sketch.B.Get(i) == true {
+	for i := uint(0); i < uint(sketch.bitmap.Size()); i++ {
+		if sketch.bitmap.Get(i) == true {
 			ones++
 		}
 	}
@@ -98,7 +103,7 @@ func (sketch *Sketch) getP() float64 {
 }
 
 /*
-GetEstimate ...
+GetEstimate returns the estimated count of a given flow
 */
 func (sketch *Sketch) GetEstimate(flow []byte) uint {
 	m := sketch.m

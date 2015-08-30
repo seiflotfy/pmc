@@ -10,8 +10,8 @@ func TestPMCHash(t *testing.T) {
 	s, _ := New(1024, 4, 4)
 	dist := make(map[uint]uint)
 	for k := 0; k < 100000; k++ {
-		i := rand(uint(s.m))
-		j := georand(uint(s.w))
+		i := float64(rand(uint(s.m)))
+		j := float64(georand(uint(s.w)))
 		pos := s.getPos([]byte("pmc"), i, j)
 		dist[pos]++
 	}

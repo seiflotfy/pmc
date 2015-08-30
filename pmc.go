@@ -55,7 +55,7 @@ It is straightforward to use any uniformly distributed hash function with
 sufficiently random output in the role of H: the input parameters can
 simply be concatenated to a single bit string.
 */
-func (sketch *Sketch) getPos(f []byte, i, j uint) uint {
+func (sketch *Sketch) getPos(f []byte, i, j float64) uint {
 	s := strconv.Itoa(int(i)) + string(f) + strconv.Itoa(int(j))
 	hash := farmhash.Hash64([]byte(s))
 	return uint(hash) % uint(sketch.l)
@@ -67,16 +67,16 @@ Increment the count of the flow by 1
 func (sketch *Sketch) Increment(flow []byte) {
 	i := rand(uint(sketch.m))
 	j := georand(uint(sketch.w))
-	pos := sketch.getPos(flow, i, j)
+	pos := sketch.getPos(flow, float64(i), float64(j))
 	sketch.bitmap.Set(pos, true)
 }
 
-func (sketch *Sketch) getZSum(flow []byte) uint {
+func (sketch *Sketch) getZSum(flow []byte) float64 {
 	z := 0.0
 	for i := 0.0; i < sketch.m; i++ {
 		j := 0.0
 		for j < sketch.w {
-			pos := sketch.getPos(flow, uint(i), uint(j))
+			pos := sketch.getPos(flow, i, j)
 			if sketch.bitmap.Get(pos) == false {
 				break
 			}
@@ -84,13 +84,13 @@ func (sketch *Sketch) getZSum(flow []byte) uint {
 		}
 		z += j
 	}
-	return uint(z)
+	return z
 }
 
-func (sketch *Sketch) getEmptyRows(flow []byte) uint {
-	k := uint(0)
+func (sketch *Sketch) getEmptyRows(flow []byte) float64 {
+	k := 0.0
 	for i := 0.0; i < sketch.m; i++ {
-		pos := sketch.getPos(flow, uint(i), 0)
+		pos := sketch.getPos(flow, i, 0)
 		if sketch.bitmap.Get(pos) == false {
 			k++
 		}
@@ -105,48 +105,44 @@ func (sketch *Sketch) getP() float64 {
 			ones++
 		}
 	}
-	return ones / float64(sketch.l)
+	return ones / sketch.l
+}
+
+func qk(k, n, p float64) float64 {
+	result := 1.0
+	for i := 1.0; i <= k; i++ {
+		result *= (1.0 - math.Pow(1.0-math.Pow(2, -i), n)*(1.0-p))
+	}
+	return result
+}
+
+func (sketch *Sketch) getE(n, p float64) float64 {
+	result := 0.0
+	for k := 1.0; k <= sketch.w; k++ {
+		result += (k * (qk(k, n, p) - qk(k+1, n, p)))
+	}
+	return result
+}
+
+func (sketch *Sketch) rho(n, p float64) float64 {
+	return math.Pow(2, sketch.getE(n, p)) / n
 }
 
 /*
 GetEstimate returns the estimated count of a given flow
 */
 func (sketch *Sketch) GetEstimate(flow []byte) uint {
-	m := sketch.m
 	p := sketch.getP()
-	k := float64(sketch.getEmptyRows(flow))
+	k := sketch.getEmptyRows(flow)
 	// Use const due to quick conversion against 0.78 (n = 1000000.0)
 	// n := -2 * m * math.Log((k)/(m*(1-p)))
 	n := 100000.0
 
 	// Dealing with small multiplicities
-	if k/(1-p) > 0.3*m {
-		return uint(-2 * m * math.Log(k/(m*(1-p))))
+	if k/(1-p) > 0.3*sketch.m {
+		return uint(-2 * sketch.m * math.Log(k/(sketch.m*(1-p))))
 	}
 
-	// FIXME: Move out of function
-	qk := func(k, n, p float64) float64 {
-		result := 1.0
-		for i := 1.0; i <= k; i++ {
-			result *= (1.0 - math.Pow(1.0-math.Pow(2, -i), n)*(1.0-p))
-		}
-		return result
-	}
-
-	// FIXME: Move out of function
-	E := func(n, p float64) float64 {
-		result := float64(0)
-		for k := 1.0; k <= sketch.w; k++ {
-			result += (k * (qk(k, n, p) - qk(k+1, n, p)))
-		}
-		return result
-	}
-
-	// FIXME: Move out of function
-	rho := func(p float64) float64 {
-		return math.Pow(2, E(n, p)) / n
-	}
-
-	z := float64(sketch.getZSum(flow))
-	return uint(m * math.Pow(2, z/m) / rho(p))
+	z := sketch.getZSum(flow)
+	return uint(sketch.m * math.Pow(2, z/sketch.m) / sketch.rho(n, p))
 }

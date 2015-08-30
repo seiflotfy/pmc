@@ -18,7 +18,7 @@ func georand(w uint) uint {
 		r++
 		val <<= 1
 	}
-	return uint(r)
+	return r
 }
 
 func rand(m uint) uint {
@@ -28,7 +28,7 @@ func rand(m uint) uint {
 func printVirtualMatrix(s *Sketch, flow []byte) {
 	for i := 0.0; i < s.m; i++ {
 		for j := 0.0; j < s.w; j++ {
-			pos := s.getPos([]byte("pmc"), uint(i), uint(j))
+			pos := s.getPos([]byte("pmc"), i, j)
 			if s.bitmap.Get(pos) == false {
 				fmt.Print(0)
 			} else {

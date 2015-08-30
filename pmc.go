@@ -2,13 +2,43 @@ package pmc
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
 
 	"code.google.com/p/gofarmhash"
 
+	"github.com/lazybeaver/xorshift"
 	"github.com/lukut/bitmaps"
 )
+
+var xor64s = xorshift.NewXorShift64Star(42)
+
+// non-receiver methods
+
+func georand(w uint) uint {
+	val := uint(xor64s.Next())
+	// Calculate the position of the leftmost 1-bit.
+	for r := uint(0); r < w-1; r++ {
+		if val&0x8000000000000000 != 0 {
+			return r
+		}
+		val <<= 1
+	}
+	return w
+}
+
+func rand(m uint) uint {
+	return uint(xor64s.Next()) % m
+}
+
+func qk(k, n, p float64) float64 {
+	result := 1.0
+	for i := 1.0; i <= k; i++ {
+		result *= (1.0 - math.Pow(1.0-math.Pow(2, -i), n)*(1.0-p))
+	}
+	return result
+}
 
 /*
 Sketch is a Probabilistic Multiplicity Counting Sketch, a novel data structure
@@ -50,13 +80,34 @@ func NewForMaxFlows(maxFlows uint) (*Sketch, error) {
 	return New(l, 256, 32)
 }
 
+func (sketch *Sketch) printVirtualMatrix(flow []byte) {
+	for i := 0.0; i < sketch.m; i++ {
+		for j := 0.0; j < sketch.w; j++ {
+			pos := sketch.getPos(flow, i, j)
+			if sketch.bitmap.Get(pos) == false {
+				fmt.Print(0)
+			} else {
+				fmt.Print(1)
+			}
+		}
+		fmt.Println("")
+	}
+}
+
+/*
+GetFillRate ...
+*/
+func (sketch *Sketch) GetFillRate() float64 {
+	return sketch.getP() * 100
+}
+
 /*
 It is straightforward to use any uniformly distributed hash function with
 sufficiently random output in the role of H: the input parameters can
 simply be concatenated to a single bit string.
 */
 func (sketch *Sketch) getPos(f []byte, i, j float64) uint {
-	s := strconv.Itoa(int(i)) + string(f) + strconv.Itoa(int(j))
+	s := strconv.Itoa(int(i)) + string(f[len(f)/2:]) + strconv.Itoa(int(j)) + string(f[:len(f)])
 	hash := farmhash.Hash64([]byte(s))
 	return uint(hash) % uint(sketch.l)
 }
@@ -99,21 +150,13 @@ func (sketch *Sketch) getEmptyRows(flow []byte) float64 {
 }
 
 func (sketch *Sketch) getP() float64 {
-	ones := float64(0)
+	ones := 0.0
 	for i := uint(0); i < uint(sketch.bitmap.Size()); i++ {
 		if sketch.bitmap.Get(i) == true {
 			ones++
 		}
 	}
 	return ones / sketch.l
-}
-
-func qk(k, n, p float64) float64 {
-	result := 1.0
-	for i := 1.0; i <= k; i++ {
-		result *= (1.0 - math.Pow(1.0-math.Pow(2, -i), n)*(1.0-p))
-	}
-	return result
 }
 
 func (sketch *Sketch) getE(n, p float64) float64 {
@@ -135,7 +178,7 @@ func (sketch *Sketch) GetEstimate(flow []byte) uint {
 	p := sketch.getP()
 	k := sketch.getEmptyRows(flow)
 	// Use const due to quick conversion against 0.78 (n = 1000000.0)
-	// n := -2 * m * math.Log((k)/(m*(1-p)))
+	// n := -2 * sketch.m * math.Log(k) / (m * (1 - p))
 	n := 100000.0
 
 	// Dealing with small multiplicities

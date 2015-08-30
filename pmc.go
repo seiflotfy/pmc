@@ -11,13 +11,15 @@ import (
 )
 
 /*
-Sketch ...
+Sketch is a Probabilistic Multiplicity Counting Sketch, a novel data structure
+that is capable of accounting traffic per flow probabilistically, that can be
+used as an alternative to Count-min sketch.
 */
 type Sketch struct {
 	l      float64
 	m      float64
 	w      float64
-	bitmap bitmaps.Bitmap
+	bitmap bitmaps.Bitmap // FIXME: Get Rid of bitmap and use uint32 array
 }
 
 /*
@@ -114,7 +116,7 @@ func (sketch *Sketch) GetEstimate(flow []byte) uint {
 	p := sketch.getP()
 	k := float64(sketch.getEmptyRows(flow))
 	// Use const due to quick conversion against 0.78 (n = 1000000.0)
-	//n := -2 * m * math.Log((k)/(m*(1-p)))
+	// n := -2 * m * math.Log((k)/(m*(1-p)))
 	n := 100000.0
 
 	// Dealing with small multiplicities
@@ -122,6 +124,7 @@ func (sketch *Sketch) GetEstimate(flow []byte) uint {
 		return uint(-2 * m * math.Log(k/(m*(1-p))))
 	}
 
+	// FIXME: Move out of function
 	qk := func(k, n, p float64) float64 {
 		result := 1.0
 		for i := 1.0; i <= k; i++ {
@@ -130,6 +133,7 @@ func (sketch *Sketch) GetEstimate(flow []byte) uint {
 		return result
 	}
 
+	// FIXME: Move out of function
 	E := func(n, p float64) float64 {
 		result := float64(0)
 		for k := 1.0; k <= sketch.w; k++ {
@@ -137,6 +141,8 @@ func (sketch *Sketch) GetEstimate(flow []byte) uint {
 		}
 		return result
 	}
+
+	// FIXME: Move out of function
 	rho := func(p float64) float64 {
 		return math.Pow(2, E(n, p)) / n
 	}

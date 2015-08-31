@@ -9,11 +9,16 @@ import (
 	"code.google.com/p/gofarmhash"
 
 	"github.com/lazybeaver/xorshift"
-	"github.com/lukut/bitmaps"
+	"github.com/willf/bitset"
 )
 
-var xor64s = xorshift.NewXorShift64Star(42)
+var (
+	xor64s = xorshift.NewXorShift64Star(42)
+	n      = 10000000.0
+)
 
+// Use const due to quick conversion against 0.78 (n = 1000000.0)
+// n := -2 * sketch.m * math.Log(k) / (m * (1 - p))
 // non-receiver methods
 
 func georand(w uint) uint {
@@ -32,6 +37,10 @@ func rand(m uint) uint {
 	return uint(xor64s.Next()) % m
 }
 
+/*
+We start with the probability qk(n) that at least the first k bits in a sketch row are set after n additions as given in (4).
+We observe that qk is now also a function of p, and obtain a modified version of (4) as follows:
+*/
 func qk(k, n, p float64) float64 {
 	result := 1.0
 	for i := 1.0; i <= k; i++ {
@@ -49,7 +58,7 @@ type Sketch struct {
 	l      float64
 	m      float64
 	w      float64
-	bitmap bitmaps.Bitmap // FIXME: Get Rid of bitmap and use uint32 array
+	bitmap *bitset.BitSet // FIXME: Get Rid of bitmap and use uint32 array
 }
 
 /*
@@ -68,7 +77,7 @@ func New(l uint, m uint, w uint) (*Sketch, error) {
 	if w == 0 {
 		return nil, errors.New("Expected w > 0, got 0")
 	}
-	return &Sketch{float64(l), float64(m), float64(w), make(bitmaps.Bitmap, l/8)}, nil
+	return &Sketch{l: float64(l), m: float64(m), w: float64(w), bitmap: bitset.New(l)}, nil
 }
 
 /*
@@ -84,7 +93,7 @@ func (sketch *Sketch) printVirtualMatrix(flow []byte) {
 	for i := 0.0; i < sketch.m; i++ {
 		for j := 0.0; j < sketch.w; j++ {
 			pos := sketch.getPos(flow, i, j)
-			if sketch.bitmap.Get(pos) == false {
+			if sketch.bitmap.Test(pos) == false {
 				fmt.Print(0)
 			} else {
 				fmt.Print(1)
@@ -107,7 +116,7 @@ sufficiently random output in the role of H: the input parameters can
 simply be concatenated to a single bit string.
 */
 func (sketch *Sketch) getPos(f []byte, i, j float64) uint {
-	s := strconv.Itoa(int(i)) + string(f[len(f)/2:]) + strconv.Itoa(int(j)) + string(f[:len(f)])
+	s := strconv.Itoa(int(i)) + string(f[len(f)/2:]) + strconv.Itoa(int(j)) + string(f[:len(f)/2])
 	hash := farmhash.Hash64([]byte(s))
 	return uint(hash) % uint(sketch.l)
 }
@@ -119,7 +128,7 @@ func (sketch *Sketch) Increment(flow []byte) {
 	i := rand(uint(sketch.m))
 	j := georand(uint(sketch.w))
 	pos := sketch.getPos(flow, float64(i), float64(j))
-	sketch.bitmap.Set(pos, true)
+	sketch.bitmap.Set(pos)
 }
 
 func (sketch *Sketch) getZSum(flow []byte) float64 {
@@ -128,7 +137,7 @@ func (sketch *Sketch) getZSum(flow []byte) float64 {
 		j := 0.0
 		for j < sketch.w {
 			pos := sketch.getPos(flow, i, j)
-			if sketch.bitmap.Get(pos) == false {
+			if sketch.bitmap.Test(pos) == false {
 				break
 			}
 			j++
@@ -142,7 +151,7 @@ func (sketch *Sketch) getEmptyRows(flow []byte) float64 {
 	k := 0.0
 	for i := 0.0; i < sketch.m; i++ {
 		pos := sketch.getPos(flow, i, 0)
-		if sketch.bitmap.Get(pos) == false {
+		if sketch.bitmap.Test(pos) == false {
 			k++
 		}
 	}
@@ -151,8 +160,8 @@ func (sketch *Sketch) getEmptyRows(flow []byte) float64 {
 
 func (sketch *Sketch) getP() float64 {
 	ones := 0.0
-	for i := uint(0); i < uint(sketch.bitmap.Size()); i++ {
-		if sketch.bitmap.Get(i) == true {
+	for i := uint(0); i < uint(sketch.l); i++ {
+		if sketch.bitmap.Test(i) == true {
 			ones++
 		}
 	}
@@ -177,9 +186,6 @@ GetEstimate returns the estimated count of a given flow
 func (sketch *Sketch) GetEstimate(flow []byte) uint {
 	p := sketch.getP()
 	k := sketch.getEmptyRows(flow)
-	// Use const due to quick conversion against 0.78 (n = 1000000.0)
-	// n := -2 * sketch.m * math.Log(k) / (m * (1 - p))
-	n := 100000.0
 
 	// Dealing with small multiplicities
 	if k/(1-p) > 0.3*sketch.m {

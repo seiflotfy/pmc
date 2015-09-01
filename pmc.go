@@ -14,21 +14,21 @@ import (
 
 var (
 	xor64s = xorshift.NewXorShift64Star(42)
-	n      = 10000000.0
+	// Use const due to quick conversion against 0.78 (n = 1000000.0)
+	// Actual implementation => n := -2 * sketch.m * math.Log(k) / (m * (1 - p))
+	n = 10000000.0
 )
 
-// Use const due to quick conversion against 0.78 (n = 1000000.0)
-// n := -2 * sketch.m * math.Log(k) / (m * (1 - p))
 // non-receiver methods
 
 func georand(w uint) uint {
-	val := uint(xor64s.Next())
+	val := xor64s.Next()
 	// Calculate the position of the leftmost 1-bit.
 	for r := uint(0); r < w-1; r++ {
 		if val&0x8000000000000000 != 0 {
 			return r
 		}
-		val <<= 1
+		val <<= 2
 	}
 	return w
 }
@@ -116,8 +116,7 @@ sufficiently random output in the role of H: the input parameters can
 simply be concatenated to a single bit string.
 */
 func (sketch *Sketch) getPos(f []byte, i, j float64) uint {
-	s := strconv.Itoa(int(i)) + string(f[len(f)/2:]) + strconv.Itoa(int(j)) + string(f[:len(f)/2])
-	hash := farmhash.Hash64([]byte(s))
+	hash := farmhash.Hash64(append(f, []byte(strconv.Itoa(int(i*sketch.w+j)))...))
 	return uint(hash) % uint(sketch.l)
 }
 

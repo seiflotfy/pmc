@@ -1,10 +1,12 @@
 package pmc
 
 import (
+	"fmt"
 	"math"
 	random "math/rand"
 	"strconv"
 	"testing"
+	"time"
 )
 
 func TestPMCHash(t *testing.T) {
@@ -37,13 +39,15 @@ func TestPMCHashAdd(t *testing.T) {
 		}
 	}
 
+	start := time.Now()
 	for i, v := range flows {
 		fCount := s.GetEstimate([]byte(v))
 		fErr := math.Abs(100 * (1 - float64(fCount)/(1000000/float64(i+1))))
-		if math.Abs(fErr) > 14 {
-			t.Errorf("Expected error for flow %d '%s' <= 14%%, got %f", i, v, math.Abs(fErr))
+		if math.Abs(fErr) > 15 {
+			t.Errorf("Expected error for flow %d '%s' <= 15%%, got %f", i, v, math.Abs(fErr))
 		}
 	}
+	fmt.Println(time.Since(start))
 }
 
 func TestRand(t *testing.T) {

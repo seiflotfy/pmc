@@ -28,9 +28,9 @@ func georand(w uint) uint {
 		if val&0x8000000000000000 != 0 {
 			return r
 		}
-		val <<= 2
+		val <<= 1
 	}
-	return w
+	return w - 1
 }
 
 func rand(m uint) uint {
@@ -59,6 +59,7 @@ type Sketch struct {
 	m      float64
 	w      float64
 	bitmap *bitset.BitSet // FIXME: Get Rid of bitmap and use uint32 array
+	p      float64
 }
 
 /*
@@ -116,7 +117,7 @@ sufficiently random output in the role of H: the input parameters can
 simply be concatenated to a single bit string.
 */
 func (sketch *Sketch) getPos(f []byte, i, j float64) uint {
-	hash := farmhash.Hash64(append(f, []byte(strconv.Itoa(int(i*sketch.w+j)))...))
+	hash := farmhash.Hash64(append([]byte(strconv.Itoa(int(i*sketch.w+j))), f...))
 	return uint(hash) % uint(sketch.l)
 }
 
@@ -124,6 +125,7 @@ func (sketch *Sketch) getPos(f []byte, i, j float64) uint {
 Increment the count of the flow by 1
 */
 func (sketch *Sketch) Increment(flow []byte) {
+	sketch.p = 0
 	i := rand(uint(sketch.m))
 	j := georand(uint(sketch.w))
 	pos := sketch.getPos(flow, float64(i), float64(j))
@@ -183,14 +185,20 @@ func (sketch *Sketch) rho(n, p float64) float64 {
 GetEstimate returns the estimated count of a given flow
 */
 func (sketch *Sketch) GetEstimate(flow []byte) uint {
-	p := sketch.getP()
+	if sketch.p == 0 {
+		sketch.p = sketch.getP()
+	}
 	k := sketch.getEmptyRows(flow)
 
 	// Dealing with small multiplicities
-	if k/(1-p) > 0.3*sketch.m {
-		return uint(-2 * sketch.m * math.Log(k/(sketch.m*(1-p))))
+	if k/(1-sketch.p) > 0.3*sketch.m {
+		return uint(-2 * sketch.m * math.Log(k/(sketch.m*(1-sketch.p))))
 	}
 
 	z := sketch.getZSum(flow)
-	return uint(sketch.m * math.Pow(2, z/sketch.m) / sketch.rho(n, p))
+	e := sketch.m * math.Pow(2, z/sketch.m) / sketch.rho(n, sketch.p)
+	if e < 0 {
+		e = 0
+	}
+	return uint(e)
 }

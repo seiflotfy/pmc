@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strconv"
 
 	"code.google.com/p/gofarmhash"
 
@@ -117,7 +116,7 @@ sufficiently random output in the role of H: the input parameters can
 simply be concatenated to a single bit string.
 */
 func (sketch *Sketch) getPos(f []byte, i, j float64) uint {
-	hash := farmhash.Hash64(append([]byte(strconv.Itoa(int(i*sketch.w+j))), f...))
+	hash := farmhash.Hash64WithSeeds(f, uint64(i), uint64(j))
 	return uint(hash) % uint(sketch.l)
 }
 
@@ -184,21 +183,19 @@ func (sketch *Sketch) rho(n, p float64) float64 {
 /*
 GetEstimate returns the estimated count of a given flow
 */
-func (sketch *Sketch) GetEstimate(flow []byte) uint {
+func (sketch *Sketch) GetEstimate(flow []byte) int {
 	if sketch.p == 0 {
 		sketch.p = sketch.getP()
 	}
 	k := sketch.getEmptyRows(flow)
 
+	e := 0.0
 	// Dealing with small multiplicities
 	if k/(1-sketch.p) > 0.3*sketch.m {
-		return uint(-2 * sketch.m * math.Log(k/(sketch.m*(1-sketch.p))))
+		e = -2 * sketch.m * math.Log(k/(sketch.m*(1-sketch.p)))
+	} else {
+		z := sketch.getZSum(flow)
+		e = sketch.m * math.Pow(2, z/sketch.m) / sketch.rho(n, sketch.p)
 	}
-
-	z := sketch.getZSum(flow)
-	e := sketch.m * math.Pow(2, z/sketch.m) / sketch.rho(n, sketch.p)
-	if e < 0 {
-		e = 0
-	}
-	return uint(e)
+	return int(e)
 }

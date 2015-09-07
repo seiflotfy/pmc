@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math"
 
-	"code.google.com/p/gofarmhash"
+	"github.com/dgryski/go-farm"
 
 	"github.com/lazybeaver/xorshift"
 	"github.com/willf/bitset"
@@ -116,7 +116,7 @@ sufficiently random output in the role of H: the input parameters can
 simply be concatenated to a single bit string.
 */
 func (sketch *Sketch) getPos(f []byte, i, j float64) uint {
-	hash := farmhash.Hash64WithSeeds(f, uint64(i), uint64(j))
+	hash := farm.Hash64WithSeeds(f, uint64(i), uint64(j))
 	return uint(hash) % uint(sketch.l)
 }
 
@@ -183,7 +183,7 @@ func (sketch *Sketch) rho(n, p float64) float64 {
 /*
 GetEstimate returns the estimated count of a given flow
 */
-func (sketch *Sketch) GetEstimate(flow []byte) int {
+func (sketch *Sketch) GetEstimate(flow []byte) float64 {
 	if sketch.p == 0 {
 		sketch.p = sketch.getP()
 	}
@@ -197,5 +197,6 @@ func (sketch *Sketch) GetEstimate(flow []byte) int {
 		z := sketch.getZSum(flow)
 		e = sketch.m * math.Pow(2, z/sketch.m) / sketch.rho(n, sketch.p)
 	}
-	return int(e)
+
+	return math.Abs(e)
 }

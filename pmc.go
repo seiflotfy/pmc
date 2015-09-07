@@ -7,24 +7,23 @@ import (
 
 	"github.com/dgryski/go-farm"
 
-	"github.com/lazybeaver/xorshift"
+	"github.com/dgryski/go-pcgr"
 	"github.com/willf/bitset"
 )
 
 var (
-	xor64s = xorshift.NewXorShift64Star(42)
+	rnd = pcgr.Rand{State: 42, Inc: 0xcafebabe}
 	// Use const due to quick conversion against 0.78 (n = 1000000.0)
 	// Actual implementation => n := -2 * sketch.m * math.Log(k) / (m * (1 - p))
 	n = 10000000.0
 )
 
 // non-receiver methods
-
 func georand(w uint) uint {
-	val := xor64s.Next()
+	val := rnd.Next()
 	// Calculate the position of the leftmost 1-bit.
 	for r := uint(0); r < w-1; r++ {
-		if val&0x8000000000000000 != 0 {
+		if val&0x80000000 != 0 {
 			return r
 		}
 		val <<= 1
@@ -33,7 +32,7 @@ func georand(w uint) uint {
 }
 
 func rand(m uint) uint {
-	return uint(xor64s.Next()) % m
+	return uint(rnd.Next()) % m
 }
 
 /*

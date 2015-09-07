@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/dgryski/go-bits"
 	"github.com/dgryski/go-farm"
-
 	"github.com/dgryski/go-pcgr"
 	"github.com/willf/bitset"
 )
@@ -22,13 +22,11 @@ var (
 func georand(w uint) uint {
 	val := rnd.Next()
 	// Calculate the position of the leftmost 1-bit.
-	for r := uint(0); r < w-1; r++ {
-		if val&0x80000000 != 0 {
-			return r
-		}
-		val <<= 1
+	res := uint(bits.Clz(uint64(val)^0)) - 32
+	if res >= w {
+		res = w - 1
 	}
-	return w - 1
+	return res
 }
 
 func rand(m uint) uint {

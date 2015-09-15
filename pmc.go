@@ -131,15 +131,13 @@ func (sketch *Sketch) Increment(flow []byte) {
 func (sketch *Sketch) getZSum(flow []byte) float64 {
 	z := 0.0
 	for i := 0.0; i < sketch.m; i++ {
-		j := 0.0
-		for j < sketch.w {
+		for j := 0.0; j < sketch.w; j++ {
 			pos := sketch.getPos(flow, i, j)
 			if sketch.bitmap.Test(pos) == false {
+				z += j
 				break
 			}
-			j++
 		}
-		z += j
 	}
 	return z
 }
@@ -188,12 +186,11 @@ func (sketch *Sketch) GetEstimate(flow []byte) float64 {
 
 	e := 0.0
 	// Dealing with small multiplicities
-	if k/(1-sketch.p) > 0.3*sketch.m {
-		e = -2 * sketch.m * math.Log(k/(sketch.m*(1-sketch.p)))
+	if kp := k / (1 - sketch.p); kp > 0.3*sketch.m {
+		e = -2 * sketch.m * math.Log(kp/sketch.m)
 	} else {
 		z := sketch.getZSum(flow)
 		e = sketch.m * math.Pow(2, z/sketch.m) / sketch.rho(n, sketch.p)
 	}
-
 	return math.Abs(e)
 }

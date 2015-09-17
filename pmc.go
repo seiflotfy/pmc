@@ -15,7 +15,7 @@ var (
 	rnd = pcgr.Rand{State: 42, Inc: 0xcafebabe}
 	// Use const due to quick conversion against 0.78 (n = 1000000.0)
 	// Actual implementation => n := -2 * sketch.m * math.Log(k) / (m * (1 - p))
-	n = 10000000.0
+	maxN = 10000000.0
 )
 
 // non-receiver methods
@@ -56,6 +56,7 @@ type Sketch struct {
 	w      float64
 	bitmap *bitset.BitSet // FIXME: Get Rid of bitmap and use uint32 array
 	p      float64
+	n      uint
 }
 
 /*
@@ -74,7 +75,8 @@ func New(l uint, m uint, w uint) (*Sketch, error) {
 	if w == 0 {
 		return nil, errors.New("Expected w > 0, got 0")
 	}
-	return &Sketch{l: float64(l), m: float64(m), w: float64(w), bitmap: bitset.New(l)}, nil
+	return &Sketch{l: float64(l), m: float64(m), w: float64(w),
+		bitmap: bitset.New(l), n: 0}, nil
 }
 
 /*
@@ -126,6 +128,7 @@ func (sketch *Sketch) Increment(flow []byte) {
 	j := georand(uint(sketch.w))
 	pos := sketch.getPos(flow, float64(i), float64(j))
 	sketch.bitmap.Set(pos)
+	sketch.n++
 }
 
 func (sketch *Sketch) getZSum(flow []byte) float64 {
@@ -172,6 +175,9 @@ func (sketch *Sketch) getE(n, p float64) float64 {
 }
 
 func (sketch *Sketch) rho(n, p float64) float64 {
+	if n >= maxN {
+		return 0.78
+	}
 	return math.Pow(2, sketch.getE(n, p)) / n
 }
 
@@ -183,6 +189,8 @@ func (sketch *Sketch) GetEstimate(flow []byte) float64 {
 		sketch.p = sketch.getP()
 	}
 	k := sketch.getEmptyRows(flow)
+	n := float64(sketch.n)
+	m := sketch.m
 
 	e := 0.0
 	// Dealing with small multiplicities
@@ -190,7 +198,7 @@ func (sketch *Sketch) GetEstimate(flow []byte) float64 {
 		e = -2 * sketch.m * math.Log(kp/sketch.m)
 	} else {
 		z := sketch.getZSum(flow)
-		e = sketch.m * math.Pow(2, z/sketch.m) / sketch.rho(n, sketch.p)
+		e = m * math.Pow(2, z/m) / sketch.rho(n, sketch.p)
 	}
 	return math.Abs(e)
 }

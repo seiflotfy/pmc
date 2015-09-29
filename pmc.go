@@ -7,22 +7,19 @@ import (
 
 	"github.com/dgryski/go-bits"
 	"github.com/dgryski/go-farm"
-	"github.com/dgryski/go-pcgr"
+	"github.com/lazybeaver/xorshift"
 	"github.com/willf/bitset"
+
+	random "math/rand"
 )
 
-var (
-	rnd = pcgr.Rand{State: 42, Inc: 0xcafebabe}
-	// Use const due to quick conversion against 0.78 (n = 1000000.0)
-	// Actual implementation => n := -2 * sketch.m * math.Log(k) / (m * (1 - p))
-	maxN = 10000000.0
-)
+var rnd = xorshift.NewXorShift64Star(42)
 
 // non-receiver methods
 func georand(w uint) uint {
 	val := rnd.Next()
 	// Calculate the position of the leftmost 1-bit.
-	res := uint(bits.Clz(uint64(val)^0)) - 32
+	res := uint(bits.Clz(uint64(val) ^ 0))
 	if res >= w {
 		res = w - 1
 	}
@@ -126,9 +123,15 @@ func (sketch *Sketch) Increment(flow []byte) {
 	sketch.p = 0
 	i := rand(uint(sketch.m))
 	j := georand(uint(sketch.w))
+
 	pos := sketch.getPos(flow, float64(i), float64(j))
-	sketch.bitmap.Set(pos)
+
 	sketch.n++
+	if random.Float64() < float64(j)/float64(sketch.l) {
+		return
+	}
+
+	sketch.bitmap.Set(pos)
 }
 
 func (sketch *Sketch) getZSum(flow []byte) float64 {
@@ -174,10 +177,7 @@ func (sketch *Sketch) getE(n, p float64) float64 {
 	return result
 }
 
-func (sketch *Sketch) rho(n, p float64) float64 {
-	if n >= maxN {
-		return 0.78
-	}
+func (sketch *Sketch) phi(n, p float64) float64 {
 	return math.Pow(2, sketch.getE(n, p)) / n
 }
 
@@ -198,7 +198,7 @@ func (sketch *Sketch) GetEstimate(flow []byte) float64 {
 		e = -2 * sketch.m * math.Log(kp/sketch.m)
 	} else {
 		z := sketch.getZSum(flow)
-		e = m * math.Pow(2, z/m) / sketch.rho(n, sketch.p)
+		e = m * math.Pow(2, z/m) / sketch.phi(n, sketch.p)
 	}
 	return math.Abs(e)
 }

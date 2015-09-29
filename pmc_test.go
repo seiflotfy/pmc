@@ -28,7 +28,7 @@ func TestPMCHashAdd(t *testing.T) {
 		flows[i] = strconv.Itoa(random.Int()) + "-flow-" + strconv.Itoa(random.Int())
 	}
 
-	s, _ := New(8000000, 256, 32)
+	s, _ := New(8000000, 256, 64)
 	for j := range flows {
 		for i := 0; i < 1000000; i++ {
 			if i%(j+1) == 0 {

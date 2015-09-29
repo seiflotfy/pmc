@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/seiflotfy/pmc"
 )
@@ -18,8 +19,10 @@ func main() {
 	var expected []uint
 	r.Comma = ';'
 
-	pmc, _ := pmc.New(8000000, 256, 320)
+	pmc, _ := pmc.New(8000000, 64, 64)
+	//cml, _ := cml.NewSketch16ForEpsilonDelta(0.00000543657, 0.99)
 
+	dur := time.Duration(0)
 	x := 0
 	for {
 		record, err := r.Read()
@@ -38,7 +41,10 @@ func main() {
 		counts, _ := strconv.ParseFloat(record[1], 64)
 		expected = append(expected, uint(counts))
 		for i := 0.0; i < counts; i++ {
+			start := time.Now()
 			pmc.Increment([]byte(id))
+			//cml.IncreaseCount([]byte(id))
+			dur += time.Since(start)
 		}
 	}
 
@@ -46,10 +52,14 @@ func main() {
 		id := fmt.Sprintf("flow-%d", i)
 		// flow id, expected, estimation
 		est := pmc.GetEstimate([]byte(id))
+		//est := cml.Frequency([]byte(id))
 		fmt.Println(id, expected[i], uint(est), est/float64(expected[i]))
-		if i == 10 {
+
+		if i > 10 {
 			break
 		}
 	}
 	fmt.Println("fill rate:", pmc.GetFillRate())
+	//fmt.Println("fill rate:", cml.GetFillRate(), dur)
+
 }
